@@ -1,0 +1,181 @@
+import React from 'react'
+
+export function SeverityBadge({ severity }) {
+  const s = (severity || 'Unknown').toLowerCase()
+  const cls = s === 'extreme' ? 'sev-extreme'
+            : s === 'severe'  ? 'sev-severe'
+            : s === 'moderate' ? 'sev-moderate'
+            : s === 'minor'   ? 'sev-minor'
+            : 'sev-unknown'
+  return <span className={`badge ${cls}`}>{severity || 'Unknown'}</span>
+}
+
+export function SeverityDot({ severity }) {
+  const s = (severity || '').toLowerCase()
+  const color = s === 'extreme' ? 'var(--critical)'
+              : s === 'severe'  ? 'var(--warning)'
+              : s === 'moderate' ? 'var(--caution)'
+              : s === 'minor'   ? 'var(--info)'
+              : 'var(--muted)'
+  return <span style={{ display:'inline-block', width:8, height:8, borderRadius:'50%', background:color, boxShadow: s==='extreme'?'0 0 5px var(--critical)':undefined }} />
+}
+
+export function StatusBadge({ status }) {
+  const ok       = status === 'ok'
+  const disabled = status === 'disabled'
+  const style = ok
+    ? { background:'rgba(0,217,126,0.12)', color:'var(--ok)', border:'1px solid rgba(0,217,126,0.3)' }
+    : disabled
+      ? { background:'var(--surface2)', color:'var(--muted)', border:'1px solid var(--border)' }
+      : {}
+  return <span className={`badge ${!ok && !disabled ? 'sev-extreme' : ''}`} style={style}>
+    {status || '—'}
+  </span>
+}
+
+export function ConnDot({ connected }) {
+  return <span className={`dot ${connected ? 'dot-ok' : 'dot-err'}`} title={connected ? 'Connected' : 'Disconnected'} />
+}
+
+export function Toggle({ checked, onChange }) {
+  return (
+    <label className="toggle">
+      <input type="checkbox" checked={checked} onChange={e => onChange(e.target.checked)} />
+      <span className="toggle-slider" />
+    </label>
+  )
+}
+
+export function Modal({ title, onClose, children, footer }) {
+  return (
+    <div className="modal-backdrop" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal">
+        <div className="modal-title">{title}</div>
+        {children}
+        {footer && <div className="modal-footer">{footer}</div>}
+      </div>
+    </div>
+  )
+}
+
+export function ChipInput({ values, onChange, placeholder }) {
+  const [input, setInput] = React.useState('')
+  const add = () => {
+    const v = input.trim()
+    if (v && !values.includes(v)) onChange([...values, v])
+    setInput('')
+  }
+  return (
+    <div>
+      <div style={{ display:'flex', gap:6 }}>
+        <input value={input} onChange={e => setInput(e.target.value)}
+          onKeyDown={e => e.key==='Enter' && (e.preventDefault(), add())}
+          placeholder={placeholder || 'Add value…'} style={{ flex:1 }} />
+        <button type="button" onClick={add} style={{ minWidth:40 }}>+</button>
+      </div>
+      {values.length > 0 && (
+        <div className="chips" style={{ marginTop:6 }}>
+          {values.map(v => (
+            <span key={v} className="chip">
+              {v}
+              <span className="chip-remove" onClick={() => onChange(values.filter(x => x !== v))}>×</span>
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// SelectChipInput — dropdown of predefined options + removable chip display.
+// Mirrors the APNs selector pattern from vectorcore-hss.
+export function SelectChipInput({ values, onChange, options, placeholder }) {
+  const [picked, setPicked] = React.useState('')
+  const available = options.filter(o => !values.includes(o))
+
+  const add = () => {
+    if (picked && !values.includes(picked)) {
+      onChange([...values, picked])
+      setPicked('')
+    }
+  }
+
+  return (
+    <div>
+      <div style={{ display:'flex', gap:6 }}>
+        <select value={picked} onChange={e => setPicked(e.target.value)} style={{ flex:1 }}
+          disabled={available.length === 0}>
+          <option value="">{available.length === 0 ? '(all selected)' : placeholder || '— Select —'}</option>
+          {available.map(o => <option key={o} value={o}>{o}</option>)}
+        </select>
+        <button type="button" onClick={add} disabled={!picked} style={{ minWidth:40 }}>+</button>
+      </div>
+      {values.length > 0 && (
+        <div className="chips" style={{ marginTop:6 }}>
+          {values.map(v => (
+            <span key={v} className="chip">
+              {v}
+              <span className="chip-remove" onClick={() => onChange(values.filter(x => x !== v))}>×</span>
+            </span>
+          ))}
+        </div>
+      )}
+      {values.length === 0 && (
+        <div style={{ fontSize:11, color:'var(--muted)', marginTop:4 }}>Empty = match all</div>
+      )}
+    </div>
+  )
+}
+
+export function fmtTime(ts) {
+  if (!ts) return '—'
+  try { return new Date(ts).toLocaleString() } catch { return ts }
+}
+
+export function fmtRel(ts) {
+  if (!ts) return '—'
+  const diff = Math.floor((Date.now() - new Date(ts).getTime()) / 1000)
+  if (diff < 60)   return `${diff}s ago`
+  const mins = Math.floor(diff / 60)
+  if (mins < 60)   return `${mins}m ago`
+  const hrs = Math.floor(mins / 60)
+  if (hrs < 24)    return `${hrs}h ago`
+  return `${Math.floor(hrs / 24)}d ago`
+}
+
+export function useAutoRefresh(fn, interval, pause) {
+  React.useEffect(() => {
+    if (pause) return
+    fn()
+    const id = setInterval(() => {
+      if (document.visibilityState !== 'hidden') fn()
+    }, interval)
+    return () => clearInterval(id)
+  }, [pause])
+}
+
+// Subscribes to the server's SSE event stream and calls fn whenever a peer
+// connects or disconnects. Reconnects automatically on error.
+export function usePeerEvents(fn) {
+  React.useEffect(() => {
+    let es
+    let retryTimer
+
+    const connect = () => {
+      es = new EventSource('/api/v1/system/events')
+      es.addEventListener('peer-change', () => {
+        if (document.visibilityState !== 'hidden') fn()
+      })
+      es.onerror = () => {
+        es.close()
+        retryTimer = setTimeout(connect, 3000)
+      }
+    }
+
+    connect()
+    return () => {
+      clearTimeout(retryTimer)
+      es?.close()
+    }
+  }, []) // fn is stable (useCallback at call site)
+}

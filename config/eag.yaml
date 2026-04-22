@@ -1,0 +1,51 @@
+server: 		   # API and web-ui
+  host: "0.0.0.0"
+  port: 81
+
+database:
+  driver: "sqlite"
+  dsn: "vectorcap.db"
+  # postgres example:
+  # dsn: "host=localhost user=postgres password=secret dbname=eag port=5432 sslmode=disable"
+
+feeds:
+  poll_interval: 60       # global default poll interval in seconds
+  user_agent: "VectorCore-EAG/1.0 (ops@example.com)"
+  # Feed sources are configured via the web UI and stored in the database.
+  # The user_agent MUST follow the format "AppName/Version (contact-email)".
+  # NWS returns 403 without a properly formatted User-Agent.
+
+expiry:
+  sweep_interval: 120     # seconds between expiry sweeps (default: 300)
+  hard_delete_after: 4    # hours after soft-delete before permanent removal (default: 72)
+
+log:
+  level: "info"           # debug | info | warn | error
+  file: "eag.log"         # path to log file; omit or leave empty for no file logging
+  # Use the -d flag at startup to also write logs to stdout regardless of this setting.
+  # Without -d, logs go only to the file (if configured) never to the console.
+
+xmpp_server:
+  domain: "eag.example.com"   # XMPP domain used in stream headers and peer JIDs
+                               # e.g. a peer named "ops-client" gets JID ops-client@eag.example.com
+
+  # TLS certificate and key (PEM-encoded files).
+  # Required when c2s.starttls: true or c2s_tls.enabled: true.
+  # Leave both empty to run plain TCP only (no TLS anywhere).
+  tls:
+    cert: "config/tls/server.crt"              # e.g. /etc/vectorcore/eag.crt  or ./certs/server.crt
+    key:  "config/tls/server.key"              # e.g. /etc/vectorcore/eag.key  or ./certs/server.key
+
+  # Plain TCP listener peers connect and optionally upgrade to TLS via STARTTLS.
+  # This is the standard XMPP port. Enable this for most deployments.
+  c2s:
+    enabled: true
+    port: 5222
+    starttls: true       # true  server offers STARTTLS upgrade (requires tls.cert + tls.key)
+                          # false plain TCP only, no encryption (for trusted internal networks)
+
+  # Direct TLS listener  TLS is active from the first byte (legacy "XMPPS" style).
+  # Requires tls.cert + tls.key. Enable when clients prefer direct TLS over STARTTLS.
+  c2s_tls:
+    enabled: true 
+    port: 5223
